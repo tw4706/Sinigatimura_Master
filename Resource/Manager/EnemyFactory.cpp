@@ -1,0 +1,156 @@
+#include "EnemyFactory.h"
+#include "Zombie.h"
+#include "SkullFlower.h"
+#include "Dog.h"
+#include "Boss2.h"
+#include "GameScene.h"
+#include"EffectManager.h"
+#include<Dxlib.h>
+#include <fstream>
+#include <sstream>
+#include <map>
+#include <functional>
+
+namespace
+{
+	//セルのサイズ
+	const int kCellSize = 48;
+	//敵の描画オフセット
+	constexpr float kEnemyOffsetY = 32.0f;
+
+	//敵の識別番号の定数
+	enum class EnemyID : int
+	{
+		None = 0,
+		Zombie = 1,
+		SkullFlower = 2,
+		NormalDog = 3,
+		WeakDog = 4,
+	};
+}
+
+void EnemyFactory::LoadFromCSV(StageType stageType, BulletManager* bulletManager)
+{
+	std::string path;
+	switch (stageType)
+	{
+	case StageType::Tutorial:
+		path = "data/Enemy/enemyData_Tutorial.csv";
+		break;
+	case StageType::Stage1:
+		path = "data/Enemy/enemyData.csv";
+		break;
+	case StageType::Stage2:
+		path = "data/Enemy/enemyData2.csv";
+		break;
+	case StageType::Stage3:
+		path = "data/Enemy/enemyData3.csv";
+		break;
+	default:
+		path = "data/Enemy/enemyData.csv";
+		break;
+	}
+
+	std::ifstream file(path);
+	std::string line;
+	int row = 0;
+
+	//敵生成用ファクトリ
+	std::map<EnemyID, std::function<std::shared_ptr<Enemy>(Vector2)>> enemyFactory =
+	{
+		{EnemyID::Zombie, [](Vector2 pos) { return std::make_shared<Zombie>(pos, Vector2{0,0}); }},
+		{EnemyID::SkullFlower, [bulletManager](Vector2 pos) { return std::make_shared<SkullFlower>(pos, Vector2{0,0}, bulletManager); }},
+		{EnemyID::NormalDog, [](Vector2 pos) { return std::make_shared<Dog>(pos, Vector2{0,0},DogType::Normal); }},
+		{EnemyID::WeakDog, [](Vector2 pos){ return std::make_shared<Dog>(pos, Vector2{0,0}, DogType::Weak); }}
+	};
+
+	//既存の敵データを削除
+	enemies_.clear();
+
+	//CSVファイルの各行を読み込み
+	while (std::getline(file, line))
+	{
+		std::stringstream ss(line);
+		std::string cell;
+		int col = 0;
+
+		while (std::getline(ss, cell, ','))
+		{
+			int rawId = std::stoi(cell);
+			EnemyID id = static_cast<EnemyID>(rawId);
+
+			if (id != EnemyID::None && enemyFactory.count(id))
+			{
+				Vector2 pos
+				{
+					static_cast<float>(col * kCellSize),
+					static_cast<float>(row * kCellSize + kEnemyOffsetY)
+				};
+				enemies_.push_back(enemyFactory[id](pos));
+			}
+			col++;
+		}
+		row++;
+	}
+}
+
+void EnemyFactory::Init(std::shared_ptr<Player> player, std::shared_ptr<Bg> bg)
+{
+	//敵の初期化
+	for (auto& enemy : enemies_)
+	{
+		enemy->Init();
+		enemy->SetPlayer(player);
+		enemy->SetBg(bg);
+		enemy->SetEffectManager(pEffectManager_);
+	}
+}
+
+void EnemyFactory::Update()
+{
+	//敵の更新
+	for (auto& enemy : enemies_)
+	{
+		enemy->Update();
+	}
+}
+
+void EnemyFactory::Draw(const Vector2& cameraOffset)
+{
+	//敵の描画
+	for (auto& enemy : enemies_)
+	{
+		if (!enemy->IsDead())
+		{
+			enemy->SetCameraOffset(cameraOffset);
+			enemy->Draw();
+		}
+	}
+}
+
+void EnemyFactory::AddBoss1(Vector2 pos, Vector2 vel,
+	std::shared_ptr<Player>player, BulletManager* bm, std::shared_ptr<Camera>camera, Boss1Type type)
+{
+	boss1_ = std::make_shared<Boss1>(pos, vel, player, bm, camera, pEffectManager_,type);
+	boss1_->SetPlayer(player);
+	boss1_->SetCamera(camera);
+	boss1_->Init();
+	enemies_.push_back(boss1_);
+}
+
+void EnemyFactory::AddBoss2(Vector2 pos, Vector2 vel,
+	std::shared_ptr<Player> player,
+	BulletManager* bm, std::shared_ptr<Camera> camera)
+{
+	boss2_ = std::make_shared<Boss2>(pos, vel, player, bm, camera, pEffectManager_);
+	boss2_->SetPlayer(player);
+	boss2_->SetCamera(camera);
+	boss2_->Init();
+	enemies_.push_back(boss2_);
+}
+
+void EnemyFactory::SetEffectManager(EffectManager* effect)
+{
+	pEffectManager_ = effect;
+}
+

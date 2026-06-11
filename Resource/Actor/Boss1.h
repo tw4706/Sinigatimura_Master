@@ -1,0 +1,41 @@
+#pragma once
+#include "Boss.h"
+
+enum class Boss1Type
+{
+    Normal,
+    Variant
+};
+
+class Player;
+class BulletManager;
+class Boss1 :public Boss
+{
+public:
+    Boss1(Vector2 pos, Vector2 vel,
+        std::shared_ptr<Player> player,
+        BulletManager* bm,
+        std::shared_ptr<Camera> camera, EffectManager* effectMgr,Boss1Type type);
+
+	~Boss1() override;
+
+    void Init() override;
+    void Update()override;
+
+    void LoadResources() override;
+
+protected:
+    void UpdateIdle() override;
+    void UpdateAttack() override;
+    void UpdateMove() override;
+	void UpdateHurt() override;
+    int GetGraphIndex(BossState state) const override;
+
+private:
+    int escapeTimer_;       //プレイヤーに近づいた際によける用タイマー
+    int knockbackDir_;      //ノックバックの方向
+    int shotCount_;
+    Vector2 chargeVel_;     //突進速度
+    Boss1Type type_;
+};
+
